@@ -43,67 +43,51 @@ namespace Loupedeck.ExamplePlugin
 
         private async void WebhookInit()
         {
-            this._webhookServer = new NotionWebhook(this);
-            this._webhookServer.StartWebhookServer();
+            // 1. FIX: Initialize the Singleton and get the global instance
+            // Note: The prefix argument is optional here, defaults to http://localhost:8080/
+            NotionWebhook.Initialize(this); 
+            var webhookServer = NotionWebhook.Instance; 
+            
+            // 2. Start the webhook server (using the instance)
+            webhookServer.StartWebhookServer();
+            
+            // 3. FIX: Await the task retrieval from the instance
+            List<TaskItem> notionTasks = await webhookServer.retrieveTasks();
 
-
-            String notionResult = await this._webhookServer.FetchNotionDataApiAsync("");
-
-            var notionTasks = new List<(string Title, string Status)>();
-
-            if (notionResult != null)
+            // Now, notionTasks contains the data AND the store has been updated inside retrieveTasks().
+            // We iterate over the data that was just fetched.
+            
+            // --- Event Cleanup ---
+            foreach (var eventId in NotionTaskStore.PreviouslyRegisteredEventIds)
             {
-                JsonObject notionResponse = (JsonObject)JsonObject.Parse(notionResult);
-                JsonArray responseResults = (JsonArray)notionResponse["results"];
-
-                PluginLog.Info($"resp res: {responseResults}");
-                foreach (var item in responseResults)
-                {
-                    var obj = item.AsObject();
-                    var props = obj["properties"]!.AsObject();
-
-                    string title = props["Task"]?["title"]?[0]?["text"]?["content"]?.ToString() ?? "";
-                    string status = props["Status"]?["status"]?["name"]?.ToString() ?? "";
-
-                    notionTasks.Add((title, status));
-                }
-
-
-                NotionTaskStore.UpdateTasks(notionTasks);
-
-
-                // Clear previous events
-                foreach (var eventId in NotionTaskStore.PreviouslyRegisteredEventIds)
-                {
-                    // Note: There's no RemoveEvent in the SDK, so we just track them
-                    PluginLog.Info($"Previous event: {eventId}");
-                }
-                NotionTaskStore.PreviouslyRegisteredEventIds.Clear();
-
-                // Register AND raise new events
-                foreach (var task in notionTasks)
-                {
-                    // Generate a unique event ID
-                    string eventId = $"task_{task.Title.Replace(" ", "_")}";
-
-                    // Add the event
-                    this._webhookServer._plugin.PluginEvents.AddEvent(
-                        eventId,
-                        task.Title,
-                        task.Status
-                    );
-
-                    // IMPORTANT: Raise the event to make it appear in Actions Ring
-                    this._webhookServer._plugin.PluginEvents.RaiseEvent(eventId);
-
-                    NotionTaskStore.PreviouslyRegisteredEventIds.Add(eventId);
-
-                    PluginLog.Info($"Registered and raised event: {eventId} - {task.Title}");
-                }
-
-                PluginLog.Info("Hackie Plugin loaded with Notion webhook");
-
+                PluginLog.Info($"Previous event: {eventId}");
             }
+            NotionTaskStore.PreviouslyRegisteredEventIds.Clear();
+
+            // --- Register New Events ---
+            // Iterate over the list that was just updated/returned
+            foreach (var task in notionTasks) 
+            {
+                // Generate a unique event ID
+                string eventId = $"task_{task.Title.Replace(" ", "_")}";
+
+                // Add the event
+                // 4. FIX: Use the instance's access to the plugin events
+                PluginEvents.AddEvent( 
+                    eventId,
+                    task.Title,
+                    task["Status"]
+                );
+
+                // IMPORTANT: Raise the event to make it appear in Actions Ring
+                PluginEvents.RaiseEvent(eventId);
+
+                NotionTaskStore.PreviouslyRegisteredEventIds.Add(eventId);
+
+                PluginLog.Info($"Registered and raised event: {eventId} - {task.Title}");
+            }
+
+            PluginLog.Info("Hackie Plugin loaded with Notion webhook");
         }
         public override void Load()
         {
@@ -118,6 +102,7 @@ namespace Loupedeck.ExamplePlugin
 
             PluginLog.Info("Activity check timer started.");
             LogAllEmbeddedResources();
+            WebhookInit();
         }
 
         public override void Unload()

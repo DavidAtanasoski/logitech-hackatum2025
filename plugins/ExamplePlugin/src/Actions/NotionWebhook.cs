@@ -2,47 +2,76 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.ComponentModel.DataAnnotations;
-    using System.Linq;
     using System.Net;
+    using System.Net.Http; // Added required using for HttpClient
+    using System.IO;       // Added required using for StreamReader
     using System.Text;
     using System.Text.Json.Nodes;
+    using System.Threading;
     using System.Threading.Tasks;
 
     public class NotionWebhook : IDisposable
     {
+        // 1. SINGLETON FIELDS
+        private static NotionWebhook _instance;
+        private static readonly object _lock = new object();
+        
+        // 2. INTERNAL FIELDS (made private readonly)
+        private readonly Plugin _plugin;
+        private readonly String _prefix;
         private HttpListener _httpListener;
         private Thread _listenerThread;
         private Boolean _isRunning = false;
-        public readonly Plugin _plugin;
-        private readonly String _prefix;
 
-        public NotionWebhook(Plugin plugin, String prefix = "http://localhost:8080/")
+
+        // 3. PRIVATE CONSTRUCTOR: Prevents outside instantiation
+        private NotionWebhook(Plugin plugin, String prefix)
         {
             this._plugin = plugin;
             this._prefix = prefix;
         }
 
+        // 4. PUBLIC ACCESSOR: Returns the single instance
+        public static NotionWebhook Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    // Throwing an exception if not initialized ensures this pattern is correctly used
+                    throw new InvalidOperationException("NotionWebhook must be initialized using NotionWebhook.Initialize() before accessing Instance.");
+                }
+                return _instance;
+            }
+        }
+        
+        // 5. INITIALIZATION METHOD: Must be called exactly once (e.g., in ExamplePlugin.Load())
+        public static void Initialize(Plugin plugin, String prefix = "http://localhost:8080/")
+        {
+            lock (_lock)
+            {
+                if (_instance == null)
+                {
+                    _instance = new NotionWebhook(plugin, prefix);
+                }
+            }
+        }
+
+        // --- EXISTING FUNCTIONALITY (No changes needed inside methods) ---
+        
         public void StartWebhookServer()
         {
-            if (this._isRunning)
-            {
-                return;
-            }
+            if (this._isRunning) return;
 
             try
             {
                 PluginLog.Info("Starting webhook server...");
-
                 this._httpListener = new HttpListener();
-                this._httpListener.Prefixes.Add("http://+:8080/");
-
-                PluginLog.Info("Prefixes added, starting listener...");
+                // Using "http://+:8080/" allows external access if firewall permits
+                this._httpListener.Prefixes.Add("http://+:8080/"); 
                 this._httpListener.Start();
 
-                PluginLog.Info("HttpListener started successfully");
                 this._isRunning = true;
-
                 this._listenerThread = new Thread(this.ListenForRequests);
                 this._listenerThread.IsBackground = true;
                 this._listenerThread.Name = "NotionWebhookListener";
@@ -59,10 +88,15 @@
         public void Stop()
         {
             this._isRunning = false;
-            this._httpListener?.Stop();
+            // Stop() handles closing the listener and listener thread gracefully
+            this._httpListener?.Stop(); 
             this._httpListener?.Close();
             PluginLog.Info("Webhook server stopped");
         }
+
+        public void Dispose() => this.Stop();
+
+        // [Listener and Request Handler methods remain unchanged, using 'this._plugin']
 
         private void ListenForRequests()
         {
@@ -70,8 +104,13 @@
             {
                 try
                 {
-                    var context = this._httpListener.GetContext();
-                    this.HandleRequest(context);
+                    // Blocking call, handles exceptions on Stop()
+                    var context = this._httpListener.GetContext(); 
+                    // HandleRequest must be async void if called from this sync thread, 
+                    // or better: Task.Run(async () => await this.HandleRequest(context));
+                    // For simplicity, we are leaving the current structure which requires 
+                    // minimal changes outside of this class.
+                    this.HandleRequest(context).Wait(); 
                 }
                 catch (HttpListenerException) { break; }
                 catch (Exception ex)
@@ -80,9 +119,10 @@
                 }
             }
         }
-
+        
         private async Task HandleRequest(HttpListenerContext context)
         {
+            // ... (Your existing request handling logic) ...
             var request = context.Request;
             var response = context.Response;
 
@@ -102,74 +142,33 @@
                 {
                     using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
                     {
-                        body = reader.ReadToEnd();
+                        body = await reader.ReadToEndAsync();
                     }
                 }
+                
+                // --- TASK RETRIEVAL AND EVENT REGISTRATION LOGIC ---
+                List<TaskItem> notionTasks = await retrieveTasks();
 
-                PluginLog.Info($"Request body: {body}");
-
-                // DO SOMETHING HERE!!
-                //Task.Run(async () => await this.FetchNotionDataApiAsync(body));
-                String notionResult = await this.FetchNotionDataApiAsync(body);
-
-                var notionTasks = new List<(string Title, string Status)>();
-
-                if (notionResult != null)
-                {
-                    JsonObject notionResponse = (JsonObject)JsonObject.Parse(notionResult);
-                    JsonArray responseResults = (JsonArray)notionResponse["results"];
-
-                    PluginLog.Info($"resp res: {responseResults}");
-                    foreach (var item in responseResults)
-                    {
-                        var obj = item.AsObject();
-                        var props = obj["properties"]!.AsObject();
-
-                        string title = props["Task"]?["title"]?[0]?["text"]?["content"]?.ToString() ?? "";
-                        string status = props["Status"]?["status"]?["name"]?.ToString() ?? "";
-
-                        notionTasks.Add((title, status));
-                    }
-                }
-
-                NotionTaskStore.UpdateTasks(notionTasks);
-
-                // Clear previous events
-                foreach (var eventId in NotionTaskStore.PreviouslyRegisteredEventIds)
-                {
-                    // Note: There's no RemoveEvent in the SDK, so we just track them
-                    PluginLog.Info($"Previous event: {eventId}");
-                }
                 NotionTaskStore.PreviouslyRegisteredEventIds.Clear();
 
-                // Register AND raise new events
                 foreach (var task in notionTasks)
                 {
-                    // Generate a unique event ID
                     string eventId = $"task_{task.Title.Replace(" ", "_")}";
 
-                    // Add the event
                     this._plugin.PluginEvents.AddEvent(
                         eventId,
                         task.Title,
-                        task.Status
+                        task["Status"]
                     );
 
-                    // IMPORTANT: Raise the event to make it appear in Actions Ring
                     this._plugin.PluginEvents.RaiseEvent(eventId);
-
                     NotionTaskStore.PreviouslyRegisteredEventIds.Add(eventId);
-
                     PluginLog.Info($"Registered and raised event: {eventId} - {task.Title}");
                 }
-
+                
                 PluginLog.Info($"Updated task store with {notionTasks.Count} tasks.");
-
-                foreach (var t in notionTasks)
-                {
-                    PluginLog.Info($"Task '{t.Title}' | Status: {t.Status}");
-                }
-
+                NotionTaskStore.UpdateTasks(notionTasks); // Ensure store is updated after processing
+                
                 // Send response
                 String responseText = "{\"success\": true, \"message\": \"Notion task received\"}";
                 Byte[] buffer = Encoding.UTF8.GetBytes(responseText);
@@ -193,9 +192,44 @@
                 catch { }
             }
         }
-        public void Dispose() => this.Stop();
+        
+        public async Task<List<TaskItem>> retrieveTasks()
+        {
+            // ... (Your existing retrieveTasks and FetchNotionDataApiAsync methods remain here) ...
+            
+            String notionResult = await this.FetchNotionDataApiAsync();
 
-        public async Task<String> FetchNotionDataApiAsync(String page_id)
+            var notionTasks = new List<TaskItem>();
+
+            if (notionResult != null)
+            {
+                JsonObject notionResponse = (JsonObject)JsonObject.Parse(notionResult);
+                JsonArray responseResults = (JsonArray)notionResponse["results"];
+
+                PluginLog.Info($"resp res: {responseResults}");
+                foreach (var item in responseResults)
+                {
+                    var obj = item.AsObject();
+                    var props = obj["properties"]!.AsObject();
+
+                    string title = props["Task"]?["title"]?[0]?["text"]?["content"]?.ToString() ?? "";
+                    string status = props["Status"]?["status"]?["name"]?.ToString() ?? "";
+                    string url = obj["url"]?.ToString() ?? "";
+                    var newTask = new TaskItem(title);
+
+                    // 3. Store all necessary fields (Status, URL, etc.) in the flexible Properties dictionary
+                    newTask["Status"] = status;
+                    newTask["Url"] = url; 
+
+                    // Add the TaskItem to the list
+                    notionTasks.Add(newTask);
+                }
+            }
+            NotionTaskStore.UpdateTasks(notionTasks);
+            return notionTasks;
+        }
+
+        public async Task<String> FetchNotionDataApiAsync()
         {
             try
             {
@@ -225,7 +259,6 @@
                         return null;
                     }
                     return apiContent;
-                    //PluginLog.Info($"Notion API Response: {apiContent.Substring(0, Math.Min(500, apiContent.Length))}...");
                 }
             }
             catch (Exception ex)
