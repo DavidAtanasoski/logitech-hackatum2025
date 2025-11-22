@@ -2,16 +2,19 @@ namespace Loupedeck.ExamplePlugin
 {
     using System;
     using System.Net;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Threading;
-    using System.Runtime.InteropServices;
-    using System.Timers; // Clarity for Timer
     using System.Reflection;
+    using System.Runtime.InteropServices;
+    using System.Text;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Text.Json.Nodes;
+    using System.Timers; // Clarity for Timer
 
 
     public class ExamplePlugin : Plugin
     {
+        private NotionWebhook _webhookServer;
+
         // DLL Imports for reading window titles
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -38,6 +41,70 @@ namespace Loupedeck.ExamplePlugin
             // Initialize the tracker
         }
 
+        private async void WebhookInit()
+        {
+            this._webhookServer = new NotionWebhook(this);
+            this._webhookServer.StartWebhookServer();
+
+
+            String notionResult = await this._webhookServer.FetchNotionDataApiAsync("");
+
+            var notionTasks = new List<(string Title, string Status)>();
+
+            if (notionResult != null)
+            {
+                JsonObject notionResponse = (JsonObject)JsonObject.Parse(notionResult);
+                JsonArray responseResults = (JsonArray)notionResponse["results"];
+
+                PluginLog.Info($"resp res: {responseResults}");
+                foreach (var item in responseResults)
+                {
+                    var obj = item.AsObject();
+                    var props = obj["properties"]!.AsObject();
+
+                    string title = props["Task"]?["title"]?[0]?["text"]?["content"]?.ToString() ?? "";
+                    string status = props["Status"]?["status"]?["name"]?.ToString() ?? "";
+
+                    notionTasks.Add((title, status));
+                }
+
+
+                NotionTaskStore.UpdateTasks(notionTasks);
+
+
+                // Clear previous events
+                foreach (var eventId in NotionTaskStore.PreviouslyRegisteredEventIds)
+                {
+                    // Note: There's no RemoveEvent in the SDK, so we just track them
+                    PluginLog.Info($"Previous event: {eventId}");
+                }
+                NotionTaskStore.PreviouslyRegisteredEventIds.Clear();
+
+                // Register AND raise new events
+                foreach (var task in notionTasks)
+                {
+                    // Generate a unique event ID
+                    string eventId = $"task_{task.Title.Replace(" ", "_")}";
+
+                    // Add the event
+                    this._webhookServer._plugin.PluginEvents.AddEvent(
+                        eventId,
+                        task.Title,
+                        task.Status
+                    );
+
+                    // IMPORTANT: Raise the event to make it appear in Actions Ring
+                    this._webhookServer._plugin.PluginEvents.RaiseEvent(eventId);
+
+                    NotionTaskStore.PreviouslyRegisteredEventIds.Add(eventId);
+
+                    PluginLog.Info($"Registered and raised event: {eventId} - {task.Title}");
+                }
+
+                PluginLog.Info("Hackie Plugin loaded with Notion webhook");
+
+            }
+        }
         public override void Load()
         {
             PluginLog.Info("Plugin Loading...");
@@ -84,7 +151,7 @@ namespace Loupedeck.ExamplePlugin
         {
             // Get the assembly containing your plugin code and resources
             Assembly assembly = this.Assembly;
-            
+
             // Retrieve all resource names included in the manifest
             string[] resourceNames = assembly.GetManifestResourceNames();
 
@@ -96,13 +163,13 @@ namespace Loupedeck.ExamplePlugin
 
             StringBuilder log = new StringBuilder();
             log.AppendLine("--- Embedded Resources Found ---");
-            
+
             foreach (string name in resourceNames)
             {
                 log.AppendLine(name);
             }
             log.AppendLine("--------------------------------");
-            
+
             // Print the list to the Loupedeck log file
             PluginLog.Info(log.ToString());
         }

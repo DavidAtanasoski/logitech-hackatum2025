@@ -236,7 +236,7 @@ namespace Loupedeck.ExamplePlugin
 
                 // Draw Bold Text
                 // Note: The y-coordinate has been slightly adjusted to 55 to accommodate the larger font size.
-                builder.DrawText(timeText, 0, 5, imageSize.GetWidth(), imageSize.GetHeight(), textColor, 45, -1, -1, "Arial Bold");
+                builder.DrawText(timeText, 0, 5, imageSize.GetWidth(), imageSize.GetHeight(), textColor, 45, -1, -1);
 
                 return builder.ToImage();
             }
