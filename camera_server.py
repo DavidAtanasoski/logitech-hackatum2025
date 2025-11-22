@@ -13,7 +13,7 @@ DEBUG = True
 
 
 # Stretching State and mediapipe setup
-ARMS_STRETCH_LIMIT = 1.5
+ARMS_STRETCH_LIMIT = 0.5
 arms_stretched_start = None
 stretch_alarm_sent = False
 mp_pose = mp.solutions.pose
@@ -69,7 +69,7 @@ try:
                 elapsed = current_time - arms_stretched_start
                 
                 # Trigger HTTP if held for > 2 seconds
-                if elapsed >= ARMS_STRETCH_LIMIT and not stretch_alarm_sent:
+                if elapsed >= ARMS_STRETCH_LIMIT:
                     send_command("/camera_stretching")
                     stretch_alarm_sent = True
 

@@ -7,4 +7,7 @@ events:
     description: Triggered when the camera detects you are awake
   - name: timeRunOut
     displayName: Time run out
-    descritption: Triggered when social media timer runs out
+    description: Triggered when social media timer runs out
+  - name: pomodoroTimerDone
+    displayName: Pomodoro timer done
+    description: Pomodoro timer run out

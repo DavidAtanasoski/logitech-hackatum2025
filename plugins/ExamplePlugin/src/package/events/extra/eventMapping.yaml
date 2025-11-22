@@ -5,3 +5,5 @@ haptics:
         DEFAULT: happy_alert
     timeRunOut:
         DEFAULT: square
+    pomodoroTimerDone:
+        DEFAULT: damp_collision

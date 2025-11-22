@@ -13,8 +13,6 @@ namespace Loupedeck.ExamplePlugin
 
     public class ExamplePlugin : Plugin
     {
-        private NotionWebhook _webhookServer;
-
         // DLL Imports for reading window titles
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -37,7 +35,7 @@ namespace Loupedeck.ExamplePlugin
             this.PluginEvents.AddEvent("sleepy", "Camera sleepy", "Triggered when sleepy");
             this.PluginEvents.AddEvent("awake", "Camera awake", "Triggered when awake");
             this.PluginEvents.AddEvent("timeRunOut", "Time run out", "Triggered when social media timer runs out");
-
+            this.PluginEvents.AddEvent("pomodoroTimerDone", "Pomodoro timer done", "Triggered when pomodoro timer is done");
             // Initialize the tracker
         }
 
