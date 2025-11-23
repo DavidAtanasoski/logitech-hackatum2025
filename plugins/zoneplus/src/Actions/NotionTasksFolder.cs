@@ -3,18 +3,44 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
-
+    using System.Timers;
     public class NotionTasksFolder : PluginDynamicFolder
     {
         private const string AddNewTaskActionId = "ADD_NEW_TASK"; 
-        
+        private Timer _namesChangedTimer;
+
         public NotionTasksFolder()
             : base()
         {
             this.DisplayName = "Notion Tasks"; 
-            this.GroupName = "Notion";       
+            this.GroupName = "Notion";   
+
         }
-        
+        private void OnTimerTick(object sender, ElapsedEventArgs e)
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    var notionWebhookInstance = NotionWebhook.Instance;
+                    var fetchedTasks = notionWebhookInstance.retrieveTasks().GetAwaiter().GetResult();
+                    this.ButtonActionNamesChanged();
+                }
+                catch (Exception ex)
+                {
+                }
+            });
+        }
+
+        public override bool Load()
+        {
+            this.ButtonActionNamesChanged();
+            _namesChangedTimer = new Timer(2000); 
+            _namesChangedTimer.Elapsed += OnTimerTick;
+            _namesChangedTimer.AutoReset = true; 
+            _namesChangedTimer.Enabled = true;
+            return true;
+        }
         public override PluginDynamicFolderNavigation GetNavigationArea(DeviceType _)
         {
             return PluginDynamicFolderNavigation.ButtonArea;
@@ -22,11 +48,14 @@
 
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType _)
         {
+            // NO asynchronous fetching here. Data should be pre-loaded by the timer.
+            
+            // 1. Retrieve the tasks from the store (this is a fast, synchronous read)
             var tasks = NotionTaskStore.GetTasks();
+            
             var actions = new List<string>
             {
                 PluginDynamicFolder.NavigateUpActionName,
-                
                 this.CreateCommandName(AddNewTaskActionId) 
             };
 

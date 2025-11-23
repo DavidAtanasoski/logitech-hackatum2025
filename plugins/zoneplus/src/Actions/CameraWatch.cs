@@ -276,7 +276,6 @@ namespace Loupedeck.Zoneplus
                         this._batteryLevel = Math.Min(this._batteryLevel + 1, 100);
                         this.ActionImageChanged(BatteryStatusParam);
                     }
-                    
                     if(this._cameraEnabled) 
                     {
                         if (path == "/camera_sleepy")

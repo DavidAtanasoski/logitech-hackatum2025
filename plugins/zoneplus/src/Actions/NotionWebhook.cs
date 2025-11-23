@@ -40,7 +40,7 @@
             }
         }
         
-        public static void Initialize(Plugin plugin, String prefix = "http://localhost:8080/")
+        public static void Initialize(Plugin plugin, String prefix = "http://+:8080/")
         {
             lock (_lock)
             {
@@ -125,6 +125,7 @@
                     using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
                     {
                         body = await reader.ReadToEndAsync();
+                        PluginLog.Info(body);
                     }
                 }
                 
@@ -184,7 +185,6 @@
                 JsonObject notionResponse = (JsonObject)JsonObject.Parse(notionResult);
                 JsonArray responseResults = (JsonArray)notionResponse["results"];
 
-                PluginLog.Info($"resp res: {responseResults}");
                 foreach (var item in responseResults)
                 {
                     var obj = item.AsObject();

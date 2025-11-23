@@ -65,7 +65,7 @@ try:
                     stretch_alarm_sent = True
 
                 if DEBUG:
-                    cv2.putText(frame, f"Stretching: {elapsed:.1f}s", (10, 100), 
+                    cv2.putText(frame, f"Stretching for {elapsed:.1f}s", (10, 100), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             else:
                 arms_stretched_start = None
