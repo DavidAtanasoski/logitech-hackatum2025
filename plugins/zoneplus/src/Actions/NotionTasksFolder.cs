@@ -48,9 +48,6 @@
 
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType _)
         {
-            // NO asynchronous fetching here. Data should be pre-loaded by the timer.
-            
-            // 1. Retrieve the tasks from the store (this is a fast, synchronous read)
             var tasks = NotionTaskStore.GetTasks();
             
             var actions = new List<string>
