@@ -1,14 +1,13 @@
 import cv2
 import dlib
 import numpy as np
-from scipy.spatial import distance as dist
 import time
 import mediapipe as mp
 from command_sender import send_command
 from drowsiness_detector import eye_aspect_ratio
 from stretch_detector import are_arms_stretched
 
-# --- CONFIGURATION ---
+# Set to True to get camera window
 DEBUG = True
 
 
@@ -46,29 +45,21 @@ try:
         ret, frame = cap.read()
         if not ret: break
 
-        # Preprocessing
-        # MediaPipe needs RGB, Dlib works on Grayscale
         image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
         current_time = time.time()
-
-        # ============================================================
-        # 1. BODY POSE & STRETCHING DETECTION (MediaPipe)
-        # ============================================================
         pose_results = pose.process(image_rgb)
         
         if pose_results.pose_landmarks:
             landmarks = pose_results.pose_landmarks.landmark
             
-            # Check logic
             if are_arms_stretched(mp_pose, landmarks):
                 if arms_stretched_start is None:
                     arms_stretched_start = current_time
                 
                 elapsed = current_time - arms_stretched_start
                 
-                # Trigger HTTP if held for > 2 seconds
                 if elapsed >= ARMS_STRETCH_LIMIT:
                     send_command("/camera_stretching")
                     stretch_alarm_sent = True
@@ -77,18 +68,13 @@ try:
                     cv2.putText(frame, f"Stretching: {elapsed:.1f}s", (10, 100), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             else:
-                # Reset if they stop stretching
                 arms_stretched_start = None
                 stretch_alarm_sent = False
 
-            # Draw skeleton if Debugging
             if DEBUG:
                 mp.solutions.drawing_utils.draw_landmarks(
                     frame, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-        # ============================================================
-        # 2. FACE DROWSINESS DETECTION (Dlib)
-        # ============================================================
         rects = detector(gray, 0)
 
         for rect in rects:
@@ -110,7 +96,6 @@ try:
                 cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
                 cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
 
-            # Drowsiness Logic
             if ear < EAR_THRESHOLD:
                 COUNTER += 1
 
@@ -137,7 +122,6 @@ try:
                 cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        # --- GUI LOGIC ---
         if DEBUG:
             cv2.imshow("Frame", frame)
             if cv2.waitKey(1) == ord("q"):
@@ -149,6 +133,5 @@ try:
 except KeyboardInterrupt:
     print("[INFO] Stopping...")
 
-# Cleanup
 cap.release()
 cv2.destroyAllWindows()

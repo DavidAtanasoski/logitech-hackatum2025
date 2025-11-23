@@ -6,15 +6,13 @@ def calculate_angle(a, b, c):
     Calculates the angle between three points (a, b, c) where b is the vertex.
     Returns angle in degrees.
     """
-    a = np.array(a) # First
-    b = np.array(b) # Mid
-    c = np.array(c) # End
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
     
-    # Calculate radians using arctan2 (handles all quadrants correctly)
     radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
     angle = np.abs(radians*180.0/np.pi)
     
-    # Standardize angle to be within 0-180
     if angle > 180.0:
         angle = 360 - angle
         
@@ -61,16 +59,9 @@ def are_arms_stretched(mp_pose, landmarks):
         [r_wrist.x, r_wrist.y]
     )
 
-    # 4. Check Logic
-    
-    # Straightness: Human arms are rarely perfectly 180. >160 is a good threshold.
+    # 4. Straightness: Human arms are rarely perfectly 180. >160 is a good threshold.
     is_straight = left_angle > 150 and right_angle > 150
-    
-    # Elevation: In Computer Vision (OpenCV/MediaPipe), Y=0 is the TOP of the screen.
-    # So, for wrists to be "above" shoulders, wrist.y must be LESS THAN shoulder.y
     is_elevated = (l_wrist.y < l_shoulder.y) and (r_wrist.y < r_shoulder.y)
-
-    # Alternatively: Check if wrists are above the NOSE for a "High Stretch"
     nose = landmarks[mp_pose.PoseLandmark.NOSE.value]
     is_high_stretch = (l_wrist.y < nose.y) and (r_wrist.y < nose.y)
 

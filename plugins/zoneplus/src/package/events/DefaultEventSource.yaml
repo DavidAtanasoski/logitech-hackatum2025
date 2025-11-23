@@ -1,0 +1,13 @@
+events:
+  - name: sleepy
+    displayName: Camera sleepy
+    description: Triggered when the camera detects you are sleepy
+  - name: awake
+    displayName: Camera awake
+    description: Triggered when the camera detects you are awake
+  - name: timeRunOut
+    displayName: Time run out
+    description: Triggered when social media timer runs out
+  - name: pomodoroTimerDone
+    displayName: Pomodoro timer done
+    description: Pomodoro timer run out

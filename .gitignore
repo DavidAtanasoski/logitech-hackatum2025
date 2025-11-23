@@ -1,3 +1,4 @@
 plugins/*/bin
 plugins/*/obj
 __pycache__
+plugins/*/.vscode

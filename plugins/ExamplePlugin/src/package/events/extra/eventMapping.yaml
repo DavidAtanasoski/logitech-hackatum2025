@@ -1,9 +1,0 @@
-haptics:
-    sleepy:
-        DEFAULT: angry_alert
-    awake:
-        DEFAULT: happy_alert
-    timeRunOut:
-        DEFAULT: square
-    pomodoroTimerDone:
-        DEFAULT: damp_collision
