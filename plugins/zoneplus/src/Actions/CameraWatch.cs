@@ -271,11 +271,7 @@ namespace Loupedeck.Zoneplus
                 {
                     string path = request.Url.AbsolutePath.ToLower();
                     
-                    if (path == "/camera_stretching")
-                    {
-                        this._batteryLevel = Math.Min(this._batteryLevel + 1, 100);
-                        this.ActionImageChanged(BatteryStatusParam);
-                    }
+
                     if(this._cameraEnabled) 
                     {
                         if (path == "/camera_sleepy")
@@ -298,6 +294,11 @@ namespace Loupedeck.Zoneplus
                             }
                             
                             this.Plugin.PluginEvents.RaiseEvent("awake");
+                        }
+                        else if (path == "/camera_stretching")
+                        {
+                            this._batteryLevel = Math.Min(this._batteryLevel + 1, 100);
+                            this.ActionImageChanged(BatteryStatusParam);
                         }
                     }
 
