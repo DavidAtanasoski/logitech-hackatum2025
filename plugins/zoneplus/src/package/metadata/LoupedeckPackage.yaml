@@ -15,7 +15,7 @@ displayName: Zoneplus
 description: Putting you in the right zone.
 
 # Name of the plugin library file.
-pluginFileName: Zoneplus.dll
+pluginFileName: ZoneplusPlugin.dll
 
 # Plugin version.
 version: 1.00
